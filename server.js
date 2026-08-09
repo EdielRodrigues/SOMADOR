@@ -7,13 +7,24 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '256kb' }));
 
-const allowed = String(process.env.ALLOWED_ORIGINS || '*').split(',').map(s=>s.trim()).filter(Boolean);
-app.use(cors({
-  origin(origin, cb){
-    if(!origin || allowed.includes('*') || allowed.includes(origin)) return cb(null, true);
-    return cb(new Error('Origem não permitida pelo CORS'));
-  }
-}));
+// O Somador pode ser aberto no Android como content:// ou file://.
+// Nesses casos o navegador pode enviar Origin: null. Este backend e exclusivo
+// da Passadoria, entao liberamos CORS para qualquer origem e tratamos OPTIONS.
+const corsOptions = {
+  origin: true,
+  methods: ['GET','POST','PUT','OPTIONS'],
+  allowedHeaders: ['Content-Type','Accept','Authorization','X-Requested-With'],
+  exposedHeaders: ['Content-Type'],
+  credentials: false,
+  optionsSuccessStatus: 204
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+app.use((req,res,next)=>{
+  res.setHeader('Access-Control-Allow-Private-Network','true');
+  res.setHeader('Cache-Control','no-store');
+  next();
+});
 
 app.use(rateLimit({ windowMs: 60 * 1000, max: 40, standardHeaders: true, legacyHeaders: false }));
 
@@ -58,8 +69,8 @@ async function mpRequest(path, options={}){
   return data;
 }
 
-app.get('/', (req,res)=>res.json({online:true,service:'Passadoria Pix Backend',version:'1.0.0',mode:'valor-variavel',timestamp:new Date().toISOString()}));
-app.get('/health', (req,res)=>res.json({ok:true,tokenConfigured:!!MP_TOKEN,service:'Passadoria Pix Backend',version:'1.0.0'}));
+app.get('/', (req,res)=>res.json({online:true,service:'Passadoria Pix Backend',version:'1.1.0-cors-android',mode:'valor-variavel',timestamp:new Date().toISOString()}));
+app.get('/health', (req,res)=>res.json({ok:true,tokenConfigured:!!MP_TOKEN,service:'Passadoria Pix Backend',version:'1.1.0-cors-android'}));
 
 app.post('/createPix', async (req,res)=>{
   if(!requireToken(res)) return;
